@@ -1,0 +1,165 @@
+{% raw %}#!/usr/bin/env python3
+#
+###############################################################
+#
+# Filename: rhel8-install.py
+# Author: Shawn Patterson
+# Description: Script to collect user information to generate
+#              client pxe and ks files on build server.
+# Usage: ./rhel8-install.py
+#
+###############################################################
+
+# Import modules
+import shutil
+import getpass
+import os.path
+import re
+
+
+# Gather build client information from user
+print()
+print("Hello", getpass.getuser() + ",", "this script will collect your input to create the necessary "
+                                        "PXE and kickstart files.")
+print()
+print("Please enter the MAC Address for the build client using lower case for any letters.""\n"
+      "Example: 08-00-27-df-e2-60""\n")
+
+client_mac_addr = input("MAC Address: ")  # Store input as client_mac_addr variable
+print(client_mac_addr)
+print()
+
+print("Please enter the FQDN for the build client.""\n"
+      "Example: rhel-test.example.com""\n")
+
+client_hostname = input("Hostname: ")  # Store input as client_hostname variable
+print(client_hostname)
+print()
+
+print("Please enter the short name for the build client.""\n"
+      "Example: rhel-test""\n")
+
+client_shortname = input("Short name: ")  # Store input as client_shortname variable
+print(client_shortname)
+print()
+
+print("Please enter the IP address for the build client.""\n"
+      "Example: 192.168.1.200""\n")
+
+client_ip_addr = input("IP Address: ")  # Store input as client_ip_addr variable
+print(client_ip_addr)
+print()
+
+print("Please enter Netmask Prefix for the build client.""\n"
+      "Example: 24""\n")
+
+client_prefix = input("Netmask Prefix: ")  # Store input as client_prefix variable
+print(client_prefix)
+print()
+
+print("Please enter the Default Gateway for the build client.""\n"
+      "Example: 192.168.1.1""\n")
+
+client_gateway = input("Default Gateway: ")  # Store input as client_gateway variable
+print(client_gateway)
+print()
+
+print("Please enter the Primary DNS Server for the build client.""\n"
+      "Example: 8.8.8.8""\n")
+
+client_dns1 = input("Primary DNS Server: ")  # Store input as client_dns1 variable
+print(client_dns1)
+print()
+
+print("Please enter the Secondary DNS Server for the build client.""\n"
+      "Example: 8.8.4.4""\n")
+
+client_dns2 = input("Secondary DNS Server: ")  # Store input as client_dns2 variable
+print(client_dns2)
+print()
+
+# Display collected information
+print("Is the following build client information correct?")
+print("--------------------------------------------------""\n")
+print(f"MAC Address: {client_mac_addr}""\n"
+      f"FQDN: {client_hostname}""\n"
+      f"Short Name: {client_shortname}""\n"
+      f"IP Address: {client_ip_addr}""\n"
+      f"Netmask Prefix: {client_prefix}""\n"
+      f"Default Gateway: {client_gateway}""\n"
+      f"Primary DNS Server: {client_dns1}""\n"
+      f"Secondary DNS Server: {client_dns2}""\n")
+print("--------------------------------------------------""\n")
+
+# Confirm information
+yes_no = input("Please enter y or n: ")  # Store input as yes_no variable
+print()
+if yes_no == "y":
+    print("Proceeding to the next steps now.""\n")
+elif yes_no == "n":
+    print("Please re-run, script now exiting...")
+    exit()
+else:
+    print("Was expecting either y or n.")
+    exit()
+
+# Copy PXE template and create PXE file for build client
+# Variables
+pxe_dir = "/var/lib/tftpboot/pxelinux/pxelinux.cfg/"
+
+# Check to see if client files already exist
+pxe_exists = os.path.exists(f"{pxe_dir}01-{client_mac_addr}")
+if pxe_exists:
+    print(f"PXE file for 01-{client_mac_addr} already exists.""\n"
+          "Script now exiting...""\n")
+    exit()
+
+print("Copying PXE template and creating PXE file for client...""\n")
+# Copy PXE template
+shutil.copy2(pxe_dir + "rhel8-template", pxe_dir + f"01-{client_mac_addr}")
+
+# Append client information to PXE file
+with open(f"{pxe_dir}01-{client_mac_addr}", "a") as file:
+    file.write("\n"f"  append initrd=images/RHEL-8.6/initrd.img "
+               f"inst.ks=https://{% endraw %}{{ ansible_default_ipv4.address }}{% raw %}/ks/01-{client_mac_addr}.ks.cfg inst.noverifyssl")
+
+print("Copying and creating PXE file for client completed.""\n")
+
+# Copy ks template and append information
+# Variables
+ks_template = "/var/www/html/ks/rhel-8.6_x86_64_template.ks.cfg"
+ks_path = "/var/www/html/ks/"
+
+# Check to see if client ks file already exists
+ks_exists = os.path.exists(f"{ks_path}01-{client_mac_addr}.ks.cfg")
+if ks_exists:
+    print(f"ks file for 01-{client_mac_addr} already exists""\n"
+          "Script now exiting...""\n")
+    exit()
+
+print("Copying ks template and creating ks file for client...""\n")
+
+# Copy ks template
+shutil.copy2(ks_template, ks_path + f"01-{client_mac_addr}.ks.cfg")
+
+# Append client information for ks file
+with open(f"{ks_path}01-{client_mac_addr}.ks.cfg", "r") as file:
+    data = file.read()
+
+data = re.sub(r'hostnamectl set-hostname', f'hostnamectl set-hostname {client_hostname}', data)
+data = re.sub(r'echo "hostname"', f'echo "{client_hostname}"', data)
+data = re.sub(r'echo "x.x.x.x     fqdn  shortname"', f'echo "{client_ip_addr}     {client_hostname}  {client_shortname}"',
+              data)
+data = re.sub(r'IPADDR=', f'IPADDR={client_ip_addr}', data)
+data = re.sub(r'PREFIX=', f'PREFIX={client_prefix}', data)
+data = re.sub(r'GATEWAY=', f'GATEWAY={client_gateway}', data)
+data = re.sub(r'DNS1=', f'DNS1={client_dns1}', data)
+data = re.sub(r'DNS2=', f'DNS2={client_dns2}', data)
+
+with open(f"{ks_path}01-{client_mac_addr}.ks.cfg", "w") as file:
+    file.write(data)
+
+print("Copying ks template and creating ks file for client completed.""\n")
+print("Build client is now ready to pxe boot from the build server.""\n"
+      "Script now exiting...""\n"){% endraw %}
+

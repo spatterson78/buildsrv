@@ -1,0 +1,11 @@
+---
+- hosts: buildsrv
+  become: yes
+  tasks:
+    - name: Copy tftpboot pxe files
+      copy:
+        src: /home/spatterson/ansible/files/syslinux-tftpboot/tftpboot/
+        dest: /var/lib/tftpboot/pxelinux/
+        owner: root
+        group: root
+        mode: '0644'

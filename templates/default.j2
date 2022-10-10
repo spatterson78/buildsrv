@@ -1,0 +1,18 @@
+default menu.c32
+prompt 1
+timeout 600
+
+display boot.msg
+
+label linux
+  menu label {% raw %}^{% endraw %}Install RHEL 8.6 system
+  menu default
+  kernel images/RHEL-8.6/vmlinuz
+  append initrd=images/RHEL-8.6/initrd.img inst.ks=https://{{ ansible_default_ipv4.address }}/ks/rhel-8.6_x86_64_post.ks.cfg inst.noverifyssl
+label rescue
+  menu label {% raw %}^{% endraw %}Rescue installed system
+  kernel images/RHEL-8.6/vmlinuz
+  append initrd=images/RHEL-8.6/initrd.img rescue
+label local
+  menu label Boot from {% raw %}^{% endraw %}local drive
+  localboot 0xffff

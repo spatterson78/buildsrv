@@ -1,0 +1,199 @@
+---
+- hosts: buildsrv 
+  become: yes
+  tasks:
+    - name: Install httpd, mod_ssl, tftp-server, and dhcp-server packages
+      dnf:
+        name: "{{ item }}"
+        state: latest
+      loop:
+        - httpd
+        - mod_ssl
+        - tftp-server
+        - dhcp-server
+    - name: Configuring firewalld http/s, tftp, and dhcp access
+      firewalld:
+        service: "{{ item }}"
+        permanent: yes
+        state: enabled
+      loop:
+        - http
+        - https
+        - tftp
+        - dhcp
+    - name: Reload firewalld rules
+      command: firewall-cmd --reload
+    - name: Copy rhel8-install.py template script to /home/spatterson
+      template:
+        src: /home/spatterson/ansible/templates/rhel8-install.py.j2
+        dest: /home/spatterson/rhel8-install.py
+        owner: spatterson
+        group: spatterson
+        mode: '0775'
+    - name: Copy dhcpd.conf template
+      template:
+        src: /home/spatterson/ansible/templates/dhcpd.conf.j2
+        dest: /etc/dhcp/dhcpd.conf
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Create pxelinux directory
+      file:
+        path: /var/lib/tftpboot/pxelinux
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Create pxelinux.cfg directory
+      file:
+        path: /var/lib/tftpboot/pxelinux/pxelinux.cfg
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Create images directory
+      file:
+        path: /var/lib/tftpboot/pxelinux/images/RHEL-8.6
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Copy tftpboot pxe files
+      copy:
+        src: /home/spatterson/ansible/files/syslinux-tftpboot/tftpboot/
+        dest: /var/lib/tftpboot/pxelinux/
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Copy default pxe boot menu template
+      template:
+        src: /home/spatterson/ansible/templates/default.j2
+        dest: /var/lib/tftpboot/pxelinux/pxelinux.cfg/default
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Copy rhel8-template pxe menu file
+      copy:
+        src: /home/spatterson/ansible/files/rhel8-template
+        dest: /var/lib/tftpboot/pxelinux/pxelinux.cfg/rhel8-template
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Copy RHEL 8.6  vmlinuz file
+      copy:
+        src: /home/spatterson/ansible/files/syslinux-tftpboot/images/RHEL-8.6/vmlinuz
+        dest: /var/lib/tftpboot/pxelinux/images/RHEL-8.6/vmlinuz
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Copy RHEL 8.6 initrd.img file
+      copy:
+        src: /home/spatterson/ansible/files/syslinux-tftpboot/images/RHEL-8.6/initrd.img
+        dest: /var/lib/tftpboot/pxelinux/images/RHEL-8.6/initrd.img
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Create /etc/pki/tls/csr directory
+      file:
+        path: /etc/pki/tls/csr
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Install python3-cryptography package
+      dnf:
+        name: python3-cryptography
+        state: latest
+    - name: Generate SSL private key
+      openssl_privatekey:
+        path: /etc/pki/tls/private/rhel-test.key
+    - name: Generate CSR for self-signed certs
+      openssl_csr:
+        path: /etc/pki/tls/csr/www.rhel-test.example.com
+        privatekey_path: /etc/pki/tls/private/rhel-test.key
+        country_name: US
+        state_or_province_name: California
+        locality_name: Irvine
+        organization_name: Remote Services
+        organizational_unit_name: IT
+        common_name: rhel-test.example.com
+        email_address: shawnpatterson@gmail.com
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Generate self-signed tls/ssl certs
+      openssl_certificate:
+        path: /etc/pki/tls/certs/rhel-test.crt
+        csr_path: /etc/pki/tls/csr/www.rhel-test.example.com
+        privatekey_path: /etc/pki/tls/private/rhel-test.key
+        provider: selfsigned
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Copy apache virtual host template
+      template:
+        src: /home/spatterson/ansible/templates/apache.conf.j2
+        dest: /etc/httpd/conf.d/01-default.conf
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Copy apache index.html template
+      template:
+        src: /home/spatterson/ansible/templates/index.html.j2
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Create /iso_images directory
+      file:
+        path: /iso_images
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Copy RHEL 8.6 ISO file and create iso_images directory
+      copy:
+        src: /iso_images/rhel-8.6-x86_64-dvd.iso
+        dest: /iso_images/rhel-8.6-x86_64-dvd.iso
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Create install media directory
+      file:
+        path: /var/www/html/RHEL/RHEL-8.6
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Mount RHEL 8.6 ISO
+      command: mount -t iso9660 -o loop,ro /iso_images/rhel-8.6-x86_64-dvd.iso /mnt
+    - name: Copy files from RHEL 8.6 ISO
+      shell:
+        cmd: cp -r /mnt/* /var/www/html/RHEL/RHEL-8.6/
+    - name: Copy .treeinfo file
+      command: cp /mnt/.treeinfo /var/www/html/RHEL/RHEL-8.6/
+    - name: Unmount RHEL 8.6 ISO
+      command: umount /mnt
+    - name: Create kickstart file directory
+      file:
+        path: /var/www/html/ks
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Copy default kickstart template file
+      template:
+        src: /home/spatterson/ansible/templates/rhel-8.6_x86_64_template.ks.cfg.j2
+        dest: /var/www/html/ks/rhel-8.6_x86_64_template.ks.cfg
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Enable and restart dhcp, http, and tftp services
+      service:
+        name: "{{ item }}"
+        enabled: yes
+        state: restarted
+      loop:
+        - dhcpd
+        - httpd
+        - tftp.socket

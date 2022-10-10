@@ -1,0 +1,8 @@
+---
+all:
+  hosts:
+    rhel8-test.example.com:
+  children:
+    buildsrv:
+      hosts:
+        rhel8-test.example.com:

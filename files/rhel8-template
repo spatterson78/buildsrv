@@ -1,0 +1,10 @@
+default menu.c32
+prompt 1
+timeout 600
+
+display boot.msg
+
+label linux
+  menu label ^Install RHEL 8.6 system
+  menu default
+  kernel images/RHEL-8.6/vmlinuz

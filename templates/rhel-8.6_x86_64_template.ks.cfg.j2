@@ -1,0 +1,117 @@
+# Version RHEL 8.6
+#platform x86_64
+lang en_US
+keyboard us
+timezone America/Los_Angeles --isUtc
+rootpw <input your encrypted password here> --iscrypted
+reboot
+text
+url --url=https://{{ ansible_default_ipv4.address }}/RHEL/RHEL-8.6 --noverifyssl
+bootloader --location=mbr --append="rhgb quiet crashkernel=auto"
+
+# Start Partition Layout
+zerombr
+clearpart --all --initlabel
+ignoredisk --only-use=sda
+part /boot --fstype xfs --size 1024 --asprimary
+part pv.02 --size 1024 --grow
+volgroup vg00 --pesize=4096 pv.02
+logvol swap --fstype swap --name swap --vgname vg00 --recommended
+logvol / --fstype xfs --size 1024 --grow --name root --vgname vg00
+# End Partition Layout
+
+auth --passalgo=sha512 --useshadow
+selinux --enforcing
+firewall --enabled --ssh
+skipx
+firstboot --disable
+
+# Packages
+%packages
+@^minimal-environment
+kexec-tools
+sysstat
+bash-completion
+python36
+setroubleshoot-server
+%end
+
+# Post Install Start
+%post --erroronfail --log=/root/ks-post.log
+echo "Starting Custom Post Install Steps..."
+echo "-------------------------------------"
+echo
+# Set Hostname
+echo "Setting hostname..."
+hostnamectl set-hostname
+echo "hostname" > /etc/hostname
+echo "Set hostname completed!!!"
+echo
+# Update /etc/hosts
+echo "Updating /etc/hosts..."
+echo >> /etc/hosts
+echo "x.x.x.x     fqdn  shortname" >> /etc/hosts
+echo "/etc/hosts updated!!!"
+echo
+# Create User(s)
+echo "Creating user accounts..."
+useradd -G wheel -c "Shawn Patterson" spatterson
+echo <enter_plain_text_pass> | passwd spatterson --stdin
+echo "User accounts created!!!"
+echo
+# SSH-KEY Setup for User(s)
+echo "Setting up SSH Key for user..."
+mkdir -p /home/spatterson/.ssh
+echo <enter_your_pub_key> /home/spatterson/.ssh/authorized_keys
+chown -R spatterson:spatterson /home/spatterson/.ssh
+chmod 700 /home/spatterson/.ssh
+chmod 400 /home/spatterson/.ssh/authorized_keys
+echo "SSH Key Setup Completed!!!"
+echo
+# Sudo Access
+echo "Configuring wheel group sudo access..."
+chmod 660 /etc/sudoers
+echo "%wheel  ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers
+chmod 440 /etc/sudoers
+echo "Sudo access completed!!!"
+echo
+# Register to Red Hat
+echo "Registering Server Red Hat Subscription..."
+subscription-manager register --username=<enter_username> --password=<enter_plain_text_pass> --auto-attach
+echo "Red Hat Registration Completed!!!"
+echo
+# dnf update
+echo "Applying any available OS updates..."
+dnf clean all
+dnf -y update
+echo "Updates completed!!!"
+echo
+# Set Networking Info
+echo "Starting network config..."
+nmcli connection delete id "Wired Connection"
+nmcli connection up enp0s3
+
+cat << EOF > /etc/sysconfig/network-scripts/ifcfg-enp0s3
+DEVICE=enp0s3
+NAME=enp0s3
+TYPE=Ethernet
+BOOTPROTO=none
+ONBOOT=yes
+IPV6INIT=no
+IPADDR=
+PREFIX=
+GATEWAY=
+DNS1=
+DNS2=
+EOF
+
+echo "Network config completed!!!"
+echo
+# Post Install End
+echo "-------------------------------------"
+echo
+echo "Custom Post Install Steps Completed!!!"
+echo
+
+%end
+

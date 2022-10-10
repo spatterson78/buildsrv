@@ -1,0 +1,16 @@
+# This is the main Apache conf file configured by Ansible
+#
+# {{ ansible_managed }}
+
+<VirtualHost *:443>
+    ServerName www.{{ ansible_fqdn }}
+    DocumentRoot /var/www/html
+    SSLEngine on
+    SSLCertificateFile /etc/pki/tls/certs/rhel-test.crt
+    SSLCertificateKeyFile /etc/pki/tls/private/rhel-test.key
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName www.{{ ansible_fqdn }}
+    Redirect / https://www.{{ ansible_fqdn }}/
+</VirtualHost>
